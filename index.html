@@ -1,0 +1,136 @@
+<?php
+// index.php - Tableau de bord des cotisations
+require_once 'config.php';
+
+// 1. TRAITEMENT DU FORMULAIRE DE VERSEMENT
+$message = "";
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['ajouter_cotisation'])) {
+    $membre_id = $_POST['membre_id'];
+    $montant = $_POST['montant'];
+    $type = $_POST['type_cotisation'];
+    $date = $_POST['date_versement'];
+
+    if (!empty($membre_id) && !empty($montant) && !empty($date)) {
+        $sql = "INSERT INTO cotisations (membre_id, montant, type_cotisation, date_versement) VALUES (?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$membre_id, $montant, $type, $date]);
+        $message = "<div class='alert success'>Cotisation enregistrée avec succès !</div>";
+    } else {
+        $message = "<div class='alert danger'>Veuillez remplir tous les champs obligatoires.</div>";
+    }
+}
+
+// 2. RÉCUPÉRATION DU TOTAL DE LA CAISSE
+$totalCaisse = $pdo->query("SELECT SUM(montant) as total FROM cotisations")->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
+
+// 3. RÉCUPÉRATION DES MEMBRES POUR LE SELECT
+$membres = $pdo->query("SELECT id, prenom, nom FROM membres ORDER BY prenom ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+// 4. RÉCUPÉRATION DES 10 DERNIERS VERSEMENTS
+$sql_history = "SELECT c.montant, c.type_cotisation, c.date_versement, m.prenom, m.nom 
+                FROM cotisations c 
+                JOIN membres m ON c.membre_id = m.id 
+                ORDER BY c.date_versement DESC LIMIT 10";
+$historique = $pdo->query($sql_history)->fetchAll(PDO::FETCH_ASSOC);
+?>
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dahira Muqtafina | Gestion des Cotisations</title>
+    <!-- FontAwesome & CSS Externe -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Dahira <span>Muqtafina</span> | Gestion Financière</h1>
+        <div><i class="fa-solid fa-user-shield"></i> Espace Trésorier</div>
+    </header>
+
+    <?php echo $message; ?>
+
+    <div class="dashboard-grid">
+        <!-- Carte de la Caisse -->
+        <div class="card card-caisse">
+            <div>
+                <h3>Caisse Générale</h3>
+                <div class="solde"><?php echo number_format($totalCaisse, 0, ',', ' '); ?> FCFA</div>
+            </div>
+            <i class="fa-solid fa-sack-dollar fa-3x" style="opacity: 0.3;"></i>
+        </div>
+
+        <!-- Formulaire d'insertion -->
+        <div class="card">
+            <h3><i class="fa-solid fa-plus-circle"></i> Enregistrer un Versement</h3>
+            <form action="index.php" method="POST" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label for="Prenom">Prenom</label>
+                    <input type="text" id="Prenom" name="Prenom" placeholder="Ex: Abdoulaye" required>
+                    <label for="Nom">Nom</label>
+                    <input type="text" id="Nom" name="Nom" placeholder="Ex: Diallo" required>
+                        <?php foreach ($membres as $m): ?>
+                            <option value="<?php echo $m['id']; ?>"><?php echo htmlspecialchars($m['prenom'] . ' ' . $m['nom']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="montant">Montant (FCFA)</label>
+                    <input type="number" name="montant" id="montant" placeholder="Ex: 500" required>
+                </div>
+                <div class="form-group">
+                    <label for="type_cotisation caisse sociale">Type de Cotisation</label>
+                    <select name="type_cotisation" id="type_cotisation">
+                        <option value="Takusanu Serigne Babacar Sy (Sas)">Takusanu Serigne Babacar Sy (Sas)</option>
+                        <option value="Sukarou Koor">Sukarou Koor</option>
+                        <option value="">Xarru Tabaski</option>
+                        <option value="Social">Caisse Sociale</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date_versement">Date</label>
+                    <input type="date" name="date_versement" id="date_versement" value="<?php echo date('Y-m-d'); ?>" required>
+                </div>
+                <button type="submit" name="ajouter_cotisation" class="btn">Valider le versement</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tableau de l'historique -->
+    <div class="card">
+        <h3><i class="fa-solid fa-history"></i> Historique des Versements</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Membre</th>
+                    <th>Type</th>
+                    <th>Montant</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($historique)): ?>
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #777;">Aucun versement enregistré.</td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($historique as $h): ?>
+                        <tr>
+                            <td><strong><?php echo htmlspecialchars($h['prenom'] . ' ' . $h['nom']); ?></strong></td>
+                            <td><?php echo htmlspecialchars($h['type_cotisation']); ?></td>
+                            <td style="color: var(--primary); font-weight: 600;"><?php echo number_format($h['montant'], 0, ',', ' '); ?> FCFA</td>
+                            <td><?php echo date('d/m/Y', strtotime($h['date_versement'])); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+</html>
